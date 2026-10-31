@@ -1,6 +1,6 @@
 substitutions:
-  name: gas-connect
-  friendly_name: Gas Connect for ESPHome
+  name: gas-connect-diy
+  friendly_name: Gas Connect DIY
   # Used for the daily/monthly/yearly consumption rollover at local midnight,
   # until Home Assistant provides its own timezone
   timezone: Europe/Berlin

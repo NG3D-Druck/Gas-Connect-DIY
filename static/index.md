@@ -19,9 +19,8 @@
 
 # About
 
-Gas Connect for ESPHome is a pulse sensor for gas meters with a reed contact, with a built-in Waveshare ESP32-C3-Zero.
-It ships with ESPHome pre-installed. Available as **Gas Connect BK for ESPHome**, which fits e.g. Elster/Honeywell
-BK-G2.5–G25.
+Gas Connect DIY is a kit for a pulse sensor for gas meters with a reed contact and a Waveshare ESP32-C3-Zero,
+which fits e.g. Elster/Honeywell BK-G2.5–G25. Solder the reed contact to GPIO4 and GND, then install the firmware below.
 
 Website: [NG3D-Druck.de](https://ng3d-druck.de)
 
@@ -37,7 +36,7 @@ You can use the button below to install the pre-built firmware directly to your 
 4. **Set up Wi-Fi:** click **Install** again and select the port. The installer detects the firmware and offers
    **Configure Wi-Fi**, where you enter your Wi-Fi name and password.
    Alternatively, set up Wi-Fi via Bluetooth with the Home Assistant app, or connect to the hotspot
-   `gas-connect-xxxxxx` and open `http://192.168.4.1`.
+   `gas-connect-diy-xxxxxx` and open `http://192.168.4.1`.
 5. **Add it to Home Assistant:** the device is discovered automatically under
    *Settings → Devices & services*. Set **Pulse volume** if needed, then **Set meter reading**
    to the current value of your meter.
@@ -60,9 +59,8 @@ key when adding it.
 
 # Über
 
-Gas Connect for ESPHome ist ein Impulssensor für Gaszähler mit Reedkontakt, mit eingebautem Waveshare ESP32-C3-Zero.
-ESPHome ist bereits vorinstalliert. Erhältlich als **Gas Connect BK for ESPHome**, passend z. B. für Elster/Honeywell
-BK-G2,5–G25.
+Gas Connect DIY ist ein Bausatz für einen Impulssensor für Gaszähler mit Reedkontakt und Waveshare ESP32-C3-Zero,
+passend z. B. für Elster/Honeywell BK-G2,5–G25. Den Reedkontakt an GPIO4 und GND anlöten, dann die Firmware unten installieren.
 
 Webseite: [NG3D-Druck.de](https://ng3d-druck.de)
 
@@ -78,7 +76,7 @@ Mit dem Button unten kannst du die fertige Firmware direkt aus dem Browser per U
 4. **WLAN einrichten:** erneut auf **Installieren** klicken und den Port auswählen. Der Installer erkennt die Firmware
    und bietet **Configure Wi-Fi** an, dort WLAN-Name und Passwort eingeben.
    Alternativ das WLAN per Bluetooth mit der Home-Assistant-App einrichten oder mit dem Hotspot
-   `gas-connect-xxxxxx` verbinden und `http://192.168.4.1` öffnen.
+   `gas-connect-diy-xxxxxx` verbinden und `http://192.168.4.1` öffnen.
 5. **In Home Assistant hinzufügen:** Das Gerät wird unter *Einstellungen → Geräte & Dienste* automatisch gefunden.
    Bei Bedarf **Pulse volume** anpassen und dann bei **Set meter reading** den aktuellen Zählerstand eintragen.
 
@@ -96,7 +94,7 @@ Hinzufügen nach einem Verschlüsselungsschlüssel.
 
 </div>
 
-<esp-web-install-button manifest="firmware/gas-connect.manifest.json">
+<esp-web-install-button manifest="firmware/gas-connect-diy.manifest.json">
   <button slot="activate">
     <span data-lang="en">Install</span><span data-lang="de">Installieren</span>
   </button>

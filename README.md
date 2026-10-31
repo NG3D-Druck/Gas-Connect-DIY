@@ -1,12 +1,11 @@
-# Gas Connect for ESPHome
+# Gas Connect DIY
 
 [Deutsch](#deutsch) | [English](#english)
 
 ## Deutsch
 
-ESPHome-Firmware für den **Gas Connect for ESPHome** von [NG3D-Druck](https://ng3d-druck.de): einen Impulssensor für Gaszähler
-mit Reedkontakt, mit eingebautem Waveshare ESP32-C3-Zero. Erhältlich als **Gas Connect BK for ESPHome**, passend z. B. für
-Elster/Honeywell BK-G2,5–G25.
+ESPHome-Firmware für den Bausatz **Gas Connect DIY** von [NG3D-Druck](https://ng3d-druck.de): einen Impulssensor für
+Gaszähler mit Reedkontakt und Waveshare ESP32-C3-Zero zum Selbstaufbau, passend z. B. für Elster/Honeywell BK-G2,5–G25.
 
 ### Hardware
 
@@ -14,6 +13,8 @@ Elster/Honeywell BK-G2,5–G25.
 | ------ | --------------------------------- |
 | GPIO4  | Reedkontakt (gegen GND, Pull-up)  |
 | GPIO10 | WS2812-RGB-LED auf der Platine    |
+
+Den Reedkontakt an GPIO4 und GND des ESP32-C3-Zero anlöten, die Polung ist egal.
 
 Jede Umdrehung der letzten Rollenziffer erzeugt einen Impuls. Wie viel Gas das ist, steht auf dem Typenschild des Zählers
 (bei den meisten Gaszählern 0,01 m³) und wird über **Pulse volume** eingestellt.
@@ -46,8 +47,8 @@ Jede Umdrehung der letzten Rollenziffer erzeugt einen Impuls. Wie viel Gas das i
 
 1. Das Gerät über USB-C mit Strom versorgen.
 2. Mit dem WLAN verbinden: per Improv über Bluetooth (Home Assistant / ESPHome-App),
-   per Improv über USB im [Web-Installer](https://ng3d-druck.github.io/Gas-Connect-for-ESPHome/) oder über den Fallback-Hotspot.
-3. In Home Assistant übernehmen (es erscheint als `gas-connect-xxxxxx`, die Endung sind die letzten Stellen der MAC-Adresse)
+   per Improv über USB im [Web-Installer](https://ng3d-druck.github.io/Gas-Connect-DIY/) oder über den Fallback-Hotspot.
+3. In Home Assistant übernehmen (es erscheint als `gas-connect-diy-xxxxxx`, die Endung sind die letzten Stellen der MAC-Adresse)
    und bei **Set meter reading** den aktuellen Stand des Zählers eintragen.
    Falls dein Zähler nicht 0,01 m³ pro Umdrehung hat, vorher **Pulse volume** anpassen.
 
@@ -74,9 +75,8 @@ Home Assistant (ab Version 2026.3). Bis Home Assistant verbunden ist, oder bei �
 
 ## English
 
-ESPHome firmware for the **Gas Connect for ESPHome** by [NG3D-Druck](https://ng3d-druck.de): a pulse sensor for gas meters
-with a reed contact, with a built-in Waveshare ESP32-C3-Zero. Available as **Gas Connect BK for ESPHome**, which fits e.g.
-Elster/Honeywell BK-G2.5–G25.
+ESPHome firmware for the **Gas Connect DIY** kit by [NG3D-Druck](https://ng3d-druck.de): a pulse sensor for gas meters
+with a reed contact and a Waveshare ESP32-C3-Zero to build yourself, which fits e.g. Elster/Honeywell BK-G2.5–G25.
 
 ### Hardware
 
@@ -84,6 +84,8 @@ Elster/Honeywell BK-G2.5–G25.
 | ------ | --------------------------------- |
 | GPIO4  | Reed contact (to GND, pull-up)    |
 | GPIO10 | Onboard WS2812 RGB LED            |
+
+Solder the reed contact to GPIO4 and GND of the ESP32-C3-Zero, the polarity does not matter.
 
 Each revolution of the last drum digit creates one pulse. How much gas that is is printed on the meter
 (0.01 m³ for most gas meters) and is set via **Pulse volume**.
@@ -116,8 +118,8 @@ Each revolution of the last drum digit creates one pulse. How much gas that is i
 
 1. Power the device via USB-C.
 2. Connect it to your Wi-Fi with Improv via Bluetooth (Home Assistant / ESPHome app),
-   Improv via USB at the [web installer](https://ng3d-druck.github.io/Gas-Connect-for-ESPHome/), or the fallback hotspot.
-3. Adopt it in Home Assistant (it shows up as `gas-connect-xxxxxx`, the suffix being the end of its MAC address)
+   Improv via USB at the [web installer](https://ng3d-druck.github.io/Gas-Connect-DIY/), or the fallback hotspot.
+3. Adopt it in Home Assistant (it shows up as `gas-connect-diy-xxxxxx`, the suffix being the end of its MAC address)
    and set **Set meter reading** to the current value of your meter.
    If your meter does not count 0.01 m³ per revolution, set **Pulse volume** first.
 
