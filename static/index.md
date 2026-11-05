@@ -111,6 +111,133 @@ Hinzufügen nach einem Verschlüsselungsschlüssel.
 <p data-lang="en"><small>Note: the dialogs of the installer itself are provided by ESP Web Tools and are only available in English.</small></p>
 <p data-lang="de"><small>Hinweis: Die Dialoge des Installers selbst stammen von ESP Web Tools und sind nur auf Englisch verfügbar.</small></p>
 
+<div data-lang="en" markdown="1">
+
+**No port shown?**
+
+- Try a different USB-C cable. Many cables can only charge.
+- Plug in the device in flash mode: hold **BOOT**, plug it in, then release **BOOT**.
+- Windows 10 and 11 don't need a separate driver. The device shows up in Device Manager under
+  *Ports (COM & LPT)*. A warning sign at "USB JTAG" under *Other devices* can be ignored.
+
+</div>
+
+<div data-lang="de" markdown="1">
+
+**Kein Port zu sehen?**
+
+- Ein anderes USB-C-Kabel probieren. Viele Kabel können nur laden.
+- Das Gerät im Flash-Modus anstecken: **BOOT** gedrückt halten, einstecken, dann **BOOT** loslassen.
+- Windows 10 und 11 brauchen keinen eigenen Treiber. Das Gerät erscheint im Geräte-Manager unter
+  *Anschlüsse (COM & LPT)*. Ein Warndreieck bei „USB JTAG“ unter *Andere Geräte* kannst du ignorieren.
+
+</div>
+
+<div data-lang="en" markdown="1">
+
+# Download the firmware
+
+Prefer to flash with a tool on your computer, or can't use Chrome or Edge? Download the firmware here.
+It is the same version the web installer uses.
+
+- [gas-connect-diy-esp32c3.factory.bin](firmware/gas-connect-diy-esp32c3.factory.bin) (version <span class="fw-version">see release</span>):
+  complete image for the first installation, flash it to address **0x0**
+- [SHA-256 checksum](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [all versions on GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases)
+
+## Flash with ESP-Flasher (graphical tool)
+
+[ESP-Flasher](https://github.com/Jason2866/ESP_Flasher/releases) runs on Windows, macOS and Linux without
+installing Python.
+
+1. Download ESP-Flasher for your system and unpack it.
+2. Start the device in flash mode: hold **BOOT**, plug in the USB-C cable, release **BOOT**.
+3. Start ESP-Flasher, select the serial port and the downloaded `gas-connect-diy-esp32c3.factory.bin`,
+   then click **Flash ESP**. Wait until the log shows that flashing is done.
+4. Unplug the USB-C cable and plug it back in without pressing **BOOT**.
+5. Set up Wi-Fi via the hotspot `gas-connect-diy-xxxxxx` (`http://192.168.4.1`) or via Bluetooth with the
+   Home Assistant app, then continue with step 5 of the installation above.
+
+## Flash with esptool (command line)
+
+[esptool](https://docs.espressif.com/projects/esptool/) is the official flashing tool from Espressif. Install it with
+`pip install esptool`, or download the standalone version without Python from the
+[esptool releases](https://github.com/espressif/esptool/releases).
+
+1. Start the device in flash mode: hold **BOOT**, plug in the USB-C cable, release **BOOT**.
+2. Find the port: Windows `COM3` (Device Manager → Ports), Linux `/dev/ttyACM0`, macOS `/dev/cu.usbmodem…`.
+3. Flash the firmware (replace the port):
+
+   ```
+   esptool --chip esp32c3 --port COM3 write-flash 0x0 gas-connect-diy-esp32c3.factory.bin
+   ```
+
+   With esptool older than version 5 the command is `esptool.py … write_flash …`.
+4. Unplug the USB-C cable and plug it back in without pressing **BOOT**.
+5. Set up Wi-Fi via the hotspot `gas-connect-diy-xxxxxx` (`http://192.168.4.1`) or via Bluetooth with the
+   Home Assistant app, then continue with step 5 of the installation above.
+
+**Check the download (optional):** `certutil -hashfile gas-connect-diy-esp32c3.factory.bin SHA256` (Windows) or
+`sha256sum gas-connect-diy-esp32c3.factory.bin` (Linux/macOS) must show the value from the checksum file.
+
+**Updates** don't need a download: Home Assistant shows new firmware under *Settings → Updates* and installs it
+over Wi-Fi. Reinstalling the factory image over USB can reset the meter reading and the encryption key. Note your
+meter reading first; if Home Assistant asks for a key afterwards, remove the device and add it again.
+
+</div>
+
+<div data-lang="de" markdown="1">
+
+# Firmware herunterladen
+
+Du flashst lieber mit einem Programm auf deinem Computer, oder Chrome und Edge gehen bei dir nicht? Hier gibt es die
+Firmware zum Herunterladen. Es ist dieselbe Version, die der Web-Installer aufspielt.
+
+- [gas-connect-diy-esp32c3.factory.bin](firmware/gas-connect-diy-esp32c3.factory.bin) (Version <span class="fw-version">siehe Release</span>):
+  vollständiges Abbild für die erste Installation, wird an Adresse **0x0** geschrieben
+- [SHA-256-Prüfsumme](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [alle Versionen auf GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases)
+
+## Mit ESP-Flasher flashen (mit Oberfläche)
+
+[ESP-Flasher](https://github.com/Jason2866/ESP_Flasher/releases) läuft unter Windows, macOS und Linux, ohne dass
+du Python installieren musst.
+
+1. ESP-Flasher für dein System herunterladen und entpacken.
+2. Gerät im Flash-Modus starten: **BOOT** gedrückt halten, USB-C-Kabel einstecken, **BOOT** loslassen.
+3. ESP-Flasher starten, den seriellen Port und die heruntergeladene `gas-connect-diy-esp32c3.factory.bin`
+   auswählen und auf **Flash ESP** klicken. Warten, bis das Protokoll meldet, dass das Flashen fertig ist.
+4. USB-C-Kabel abziehen und ohne **BOOT** wieder einstecken.
+5. WLAN über den Hotspot `gas-connect-diy-xxxxxx` (`http://192.168.4.1`) oder per Bluetooth mit der
+   Home-Assistant-App einrichten, dann weiter mit Schritt 5 der Installation oben.
+
+## Mit esptool flashen (Kommandozeile)
+
+[esptool](https://docs.espressif.com/projects/esptool/) ist das offizielle Flash-Programm von Espressif. Installieren
+mit `pip install esptool` oder die Version ohne Python von den
+[esptool-Releases](https://github.com/espressif/esptool/releases) herunterladen.
+
+1. Gerät im Flash-Modus starten: **BOOT** gedrückt halten, USB-C-Kabel einstecken, **BOOT** loslassen.
+2. Port herausfinden: Windows `COM3` (Geräte-Manager → Anschlüsse), Linux `/dev/ttyACM0`, macOS `/dev/cu.usbmodem…`.
+3. Firmware aufspielen (Port anpassen):
+
+   ```
+   esptool --chip esp32c3 --port COM3 write-flash 0x0 gas-connect-diy-esp32c3.factory.bin
+   ```
+
+   Bei esptool vor Version 5 heißt der Befehl `esptool.py … write_flash …`.
+4. USB-C-Kabel abziehen und ohne **BOOT** wieder einstecken.
+5. WLAN über den Hotspot `gas-connect-diy-xxxxxx` (`http://192.168.4.1`) oder per Bluetooth mit der
+   Home-Assistant-App einrichten, dann weiter mit Schritt 5 der Installation oben.
+
+**Download prüfen (optional):** `certutil -hashfile gas-connect-diy-esp32c3.factory.bin SHA256` (Windows) oder
+`sha256sum gas-connect-diy-esp32c3.factory.bin` (Linux/macOS) muss den Wert aus der Prüfsummen-Datei zeigen.
+
+**Für Updates** brauchst du keinen Download: Home Assistant zeigt neue Firmware unter *Einstellungen → Updates*
+an und installiert sie per WLAN. Ein erneutes Aufspielen per USB kann Zählerstand und Verschlüsselungsschlüssel
+zurücksetzen. Notiere vorher deinen Zählerstand. Fragt Home Assistant danach nach einem Schlüssel, das Gerät
+entfernen und neu hinzufügen.
+
+</div>
+
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
 <script>
@@ -131,5 +258,9 @@ Hinzufügen nach einem Verschlüsselungsschlüssel.
     document.querySelectorAll("[data-set-lang]").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-set-lang")); });
     });
+    // Show the version of the downloadable firmware from the manifest
+    fetch("firmware/gas-connect-diy.manifest.json").then(function (r) { return r.json(); }).then(function (m) {
+      document.querySelectorAll(".fw-version").forEach(function (el) { el.textContent = m.version; });
+    }).catch(function () {});
   })();
 </script>
