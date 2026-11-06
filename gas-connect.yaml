@@ -4,6 +4,9 @@ substitutions:
   # Used for the daily/monthly/yearly consumption rollover at local midnight,
   # until Home Assistant provides its own timezone
   timezone: Europe/Berlin
+  # Connection the LED reports as yellow blinking when it is missing;
+  # the MQTT variant replaces it with the broker connection
+  server_connected: api::global_api_server->is_connected()
 
 esphome:
   name: ${name}
@@ -12,13 +15,14 @@ esphome:
   # so you can use a single firmware for all devices
   name_add_mac_suffix: true
   on_boot:
-    # Run after all components (incl. restored globals) are set up
-    priority: -100
-    then:
-      - lambda: |-
-          id(gas_pulse_meter).set_total_pulses(id(gas_total_pulses));
-          id(gas_pulse_meter).set_filter_us(id(reed_debounce).state * 1000);
-          id(gas_total_restored) = true;
+    # Run after all components (incl. restored globals) are set up. A list,
+    # so the MQTT variant can add boot actions of its own
+    - priority: -100
+      then:
+        - lambda: |-
+            id(gas_pulse_meter).set_total_pulses(id(gas_total_pulses));
+            id(gas_pulse_meter).set_filter_us(id(reed_debounce).state * 1000);
+            id(gas_total_restored) = true;
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -37,6 +41,7 @@ api:
 # OTA is required for Over-the-Air updating
 ota:
   - platform: esphome
+    id: esphome_ota
 
 # An unprovisioned device can only be set up for this long after power-on;
 # then the fallback hotspot, captive portal and Improv close until the next
@@ -160,7 +165,7 @@ script:
           }
 
   # Shows the device status on the LED, see the "LED mode" select:
-  # blue blinking = no Wi-Fi, yellow blinking = no Home Assistant connection,
+  # blue blinking = no Wi-Fi, yellow blinking = no Home Assistant (or MQTT) connection,
   # green flash = pulse, off = all fine
   - id: led_refresh
     then:
@@ -175,7 +180,7 @@ script:
           if (mode != 2) {
             if (!wifi::global_wifi_component->is_connected()) {
               if (blink_on) b = 1;
-            } else if (!api::global_api_server->is_connected()) {
+            } else if (!(${server_connected})) {
               if (blink_on) { r = 1; g = 0.5; }
             } else if (mode == 0 && id(led_flash)) {
               g = 1;

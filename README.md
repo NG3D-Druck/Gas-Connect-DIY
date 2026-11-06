@@ -39,7 +39,7 @@ Jede Umdrehung der letzten Rollenziffer erzeugt einen Impuls. Wie viel Gas das i
 | LED                    | Bedeutung                                         |
 | ---------------------- | ------------------------------------------------- |
 | blau, blinkend         | kein WLAN (Hotspot bzw. Improv aktiv)             |
-| gelb, blinkend         | WLAN verbunden, aber keine Verbindung zu Home Assistant |
+| gelb, blinkend         | WLAN verbunden, aber keine Verbindung zu Home Assistant (MQTT-Version: zum Broker) |
 | kurz grün              | Impuls erkannt (nur bei **Status + pulse**)       |
 | aus                    | alles in Ordnung                                  |
 
@@ -68,10 +68,35 @@ Die Zeiträume wechseln um Mitternacht Ortszeit. Die Zeitzone übernimmt das Ger
 Home Assistant (ab Version 2026.3). Bis Home Assistant verbunden ist, oder bei älteren Versionen, gilt `Europe/Berlin`
 (Substitution `timezone`).
 
+### MQTT-Version (ohne Home Assistant)
+
+Für openHAB, ioBroker, Node-RED, FHEM und andere Systeme mit MQTT-Broker, installierbar über den
+[Web-Installer](https://ng3d-druck.github.io/Gas-Connect-DIY/). Gleiche Entitäten wie oben, dazu:
+
+| Entität                | Art    | Beschreibung                                               |
+| ---------------------- | ------ | ---------------------------------------------------------- |
+| MQTT broker            | Text   | Hostname oder IP-Adresse des Brokers                       |
+| MQTT port              | Zahl   | Port des Brokers, Standard 1883                            |
+| MQTT username          | Text   | Benutzername am Broker                                     |
+| MQTT password          | Text   | Passwort am Broker, wird nie angezeigt oder per MQTT gesendet |
+| Hostname               | Text   | Name im Router, des Hotspots und der `.local`-Adresse; leer = Standardname |
+| Web page username      | Text   | Benutzername für die Webseite; leer = `admin`              |
+| Web page password      | Text   | schützt die Webseite (Digest), mind. 8 Zeichen; Pflicht, ohne Passwort keine MQTT-Verbindung |
+| Save and restart       | Button | speichert die Einstellungen und startet neu                |
+| MQTT status            | Text-Sensor | Verbindung zum Broker bzw. Grund, warum sie fehlschlägt |
+
+Die Einstellungen trägt man auf der Webseite des Geräts ein (`http://gas-connect-diy-mqtt-xxxxxx.local`). Sie lassen
+sich nur in den ersten 15 Minuten nach dem Einstecken ändern (**Save and restart** lässt das Fenster offen, andere Neustarts öffnen es nicht); danach das Gerät
+kurz ab- und wieder anstecken. Die MQTT-Topics behalten auch mit eigenem Hostnamen den Standardnamen. Das Gerät
+meldet sich per MQTT-Discovery (Präfix `homeassistant`), die Topics beginnen mit `gas-connect-diy-mqtt-xxxxxx/`.
+Firmware per WLAN (ESPHome-OTA, Port 3232) nimmt das Gerät nur mit dem Webseiten-Passwort an. Gelb blinkt die LED hier, solange keine Verbindung zum Broker besteht. Die Uhrzeit kommt per SNTP, die Zeitzone ist
+`Europe/Berlin`.
+
 ### Dateien
 
 - `gas-connect.yaml` - die Konfiguration, die man bei der Übernahme im ESPHome Device Builder erhält
 - `gas-connect.factory.yaml` - die Werks-Firmware (ergänzt Improv, Projektinfos und OTA-Updates)
+- `gas-connect-mqtt.yaml`, `gas-connect-mqtt.factory.yaml` - dasselbe für die MQTT-Version
 
 ## English
 
@@ -110,7 +135,7 @@ Each revolution of the last drum digit creates one pulse. How much gas that is i
 | LED                    | Meaning                                           |
 | ---------------------- | ------------------------------------------------- |
 | blue, blinking         | no Wi-Fi (hotspot or Improv active)               |
-| yellow, blinking       | Wi-Fi connected, but no Home Assistant connection |
+| yellow, blinking       | Wi-Fi connected, but no Home Assistant connection (MQTT version: to the broker) |
 | short green flash      | pulse detected (only with **Status + pulse**)     |
 | off                    | all fine                                          |
 
@@ -139,7 +164,32 @@ The periods roll over at local midnight. The device takes the timezone from the 
 (Home Assistant 2026.3 and newer). Until Home Assistant is connected, or with older versions, `Europe/Berlin` applies
 (`timezone` substitution).
 
+### MQTT version (without Home Assistant)
+
+For openHAB, ioBroker, Node-RED, FHEM and other systems with an MQTT broker, installable from the
+[web installer](https://ng3d-druck.github.io/Gas-Connect-DIY/). Same entities as above, plus:
+
+| Entity                 | Type   | Description                                                |
+| ---------------------- | ------ | ---------------------------------------------------------- |
+| MQTT broker            | text   | host name or IP address of the broker                      |
+| MQTT port              | number | port of the broker, default 1883                           |
+| MQTT username          | text   | user name on the broker                                    |
+| MQTT password          | text   | password on the broker, never shown or sent via MQTT       |
+| Hostname               | text   | name in the router, of the hotspot and the `.local` address; empty = default name |
+| Web page username      | text   | user name for the web page; empty = `admin`                |
+| Web page password      | text   | protects the web page (digest), at least 8 characters; required, no MQTT connection without it |
+| Save and restart       | button | saves the settings and restarts                            |
+| MQTT status            | text sensor | connection to the broker, or why it fails             |
+
+Enter the settings on the web page of the device (`http://gas-connect-diy-mqtt-xxxxxx.local`). They can only be changed
+within 15 minutes after plugging in (**Save and restart** keeps the window open, other restarts do not open it); after that, unplug the device briefly and plug it
+back in. The MQTT topics keep the default name, also with a host name of your own. The device announces
+itself via MQTT discovery (prefix `homeassistant`), its topics start with `gas-connect-diy-mqtt-xxxxxx/`. Firmware over Wi-Fi
+(ESPHome OTA, port 3232) is only accepted with the web page password. Here the LED
+blinks yellow while there is no connection to the broker. The time comes from SNTP, the timezone is `Europe/Berlin`.
+
 ### Files
 
 - `gas-connect.yaml` - the configuration you get when taking control in the ESPHome Device Builder
 - `gas-connect.factory.yaml` - the factory firmware (adds Improv, project info and OTA updates)
+- `gas-connect-mqtt.yaml`, `gas-connect-mqtt.factory.yaml` - the same for the MQTT version

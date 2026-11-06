@@ -1,0 +1,519 @@
+# MQTT variant of Gas Connect DIY, for openHAB, ioBroker, Node-RED, FHEM and
+# other systems without Home Assistant. Same sensors and settings as
+# gas-connect.yaml; broker, host name and web page password are set on the
+# device's web page instead of being built into the firmware.
+packages:
+  core: !include gas-connect.yaml
+
+substitutions:
+  name: gas-connect-diy-mqtt
+  friendly_name: Gas Connect DIY MQTT
+  server_connected: mqtt::global_mqtt_client->is_connected()
+  # The settings below are only accepted this long after plugging the device
+  # in (EN 18031), like the provisioning window of the Wi-Fi setup; in ms
+  settings_window_ms: "900000"
+  # User name for the web page if none is set
+  web_username: admin
+
+esphome:
+  includes:
+    - gas-connect-mqtt.h
+  on_boot:
+    # After the globals are restored (HARDWARE), before Wi-Fi and the web
+    # server start: they pick up the host name and the password from here
+    - priority: 260
+      then:
+        - lambda: |-
+            // Only plugging the device in opens the settings window; "Save and
+            // restart" keeps it open for the rest of the time. Any other restart
+            // (web page, MQTT, update) keeps the settings locked.
+            const auto reason = esp_reset_reason();
+            if (reason == ESP_RST_POWERON || reason == ESP_RST_USB) {
+              id(settings_window_end) = ${settings_window_ms};
+            } else if (reason == ESP_RST_SW && settings_window_magic == SETTINGS_WINDOW_MAGIC &&
+                       settings_window_left_ms <= ${settings_window_ms}) {
+              id(settings_window_end) = millis() + settings_window_left_ms;
+            } else {
+              id(settings_locked) = true;
+            }
+            settings_window_magic = 0;
+            // Wi-Fi (DHCP, hotspot) and mDNS use the application name; the
+            // MQTT topics keep the original name with the MAC suffix
+            if (id(hostname_cfg)[0] != '\0') {
+              // A copy, so a new host name only applies after the restart
+              memcpy(id(hostname_active), id(hostname_cfg), sizeof(id(hostname_active)));
+              id(hostname_active)[sizeof(id(hostname_active)) - 1] = '\0';
+              const_cast<StringRef &>(App.get_name()) = StringRef(id(hostname_active), strlen(id(hostname_active)));
+            }
+            // The web server only asks for a login if credentials are set when
+            // it starts; without a password the placeholder from the config is
+            // cleared again
+            auto *web = web_server_base::global_web_server_base;
+            if (id(web_password_cfg)[0] != '\0') {
+              // A copy, so a new password only applies after the restart
+              memcpy(id(web_password_active), id(web_password_cfg), sizeof(id(web_password_active)));
+              if (id(web_username_cfg)[0] != '\0') {
+                memcpy(id(web_username_active), id(web_username_cfg), sizeof(id(web_username_active)));
+              } else {
+                strcpy(id(web_username_active), "${web_username}");
+              }
+              web->set_auth_username(id(web_username_active));
+              web->set_auth_password(id(web_password_active));
+            } else {
+              web->set_auth_username(nullptr);
+              web->set_auth_password(nullptr);
+            }
+            // The ESP-IDF MQTT client reports every failed connection as "TCP
+            // disconnected" and only logs the broker's refusal code; read it
+            // from the log. The log listener slot comes from log_topic (see
+            // mqtt), whose publishing to the broker is switched off here.
+            mqtt::global_mqtt_client->disable_log_message();
+            logger::global_logger->add_log_callback(
+                nullptr, [](void *, uint8_t, const char *, const char *message, size_t message_len) {
+                  const std::string_view text(message, message_len);
+                  const auto pos = text.find("Connection refused error: 0x");
+                  if (pos != std::string_view::npos) {
+                    id(mqtt_refused_code) = (int) strtol(std::string(text.substr(pos + 28, 4)).c_str(), nullptr, 16);
+                  }
+                });
+            // Firmware uploads on the OTA port need the web page password;
+            // without one a random password nobody knows closes the port
+            if (id(web_password_active)[0] != '\0') {
+              id(esphome_ota).set_auth_password(id(web_password_active));
+            } else {
+              char random_password[33];
+              for (int i = 0; i < 16; i++) {
+                snprintf(random_password + i * 2, 3, "%02x", (unsigned) (esp_random() & 0xff));
+              }
+              id(esphome_ota).set_auth_password(random_password);
+            }
+    - priority: -100
+      then:
+        - lambda: |-
+            auto *mqtt = mqtt::global_mqtt_client;
+            // Remember why the connection failed, for the "MQTT status" sensor
+            mqtt->set_on_disconnect([](mqtt::MQTTClientDisconnectReason reason) {
+              id(mqtt_last_error) = static_cast<int>(reason);
+            });
+            if (id(mqtt_broker_cfg)[0] == '\0') {
+              ESP_LOGW("mqtt_config", "No MQTT broker set, open the web page of the device to set it");
+              return;
+            }
+            // No connection until the web page is protected (EN 18031)
+            if (id(web_password_active)[0] == '\0') {
+              ESP_LOGW("mqtt_config", "No web page password set, open the web page of the device to set it");
+              return;
+            }
+            mqtt->set_broker_address(id(mqtt_broker_cfg));
+            mqtt->set_broker_port(id(mqtt_port_cfg));
+            mqtt->set_username(id(mqtt_username_cfg));
+            mqtt->set_password(id(mqtt_password_cfg));
+            // The availability topic is built from the name without the MAC
+            // suffix; use the topic prefix instead, so every device has its own
+            const std::string status = mqtt->get_topic_prefix() + "/status";
+            mqtt->set_birth_message(mqtt::MQTTMessage{status, "online", 0, true});
+            mqtt->set_last_will(mqtt::MQTTMessage{status, "offline", 0, true});
+            mqtt->set_shutdown_message(mqtt::MQTTMessage{status, "offline", 0, true});
+            mqtt->enable();
+            id(mqtt_started) = true;
+
+interval:
+  # Closes the settings window
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (!id(settings_locked) && millis() >= id(settings_window_end)) {
+            id(settings_locked) = true;
+            ESP_LOGI("settings", "Settings are locked now");
+          }
+
+# Uploads on the OTA port need a password, set on boot (see on_boot)
+ota:
+  - id: !extend esphome_ota
+    password: ""
+
+# No Home Assistant: no native API and no time from Home Assistant
+api: !remove
+
+time:
+  - id: !remove homeassistant_time
+
+# Broker, port and credentials come from the globals below on boot; until a
+# broker is set the client stays off. The broker is only read when connecting,
+# so the device restarts after the settings were changed.
+mqtt:
+  broker: unconfigured
+  enable_on_boot: false
+  # Without a broker there is nothing to wait for, so never reboot over it
+  reboot_timeout: 0s
+  # Never published (switched off on boot); only reserves the log listener
+  # slot the "MQTT status" sensor reads the broker's refusal code with
+  log_topic:
+    topic: ${name}/debug
+    level: ERROR
+  on_connect:
+    - lambda: |-
+        id(mqtt_last_error) = -1;
+        id(mqtt_refused_code) = -1;
+
+# Device web page: shows all values and holds the settings
+web_server:
+  version: 3
+  port: 80
+  # No firmware upload from the web page; updates come from GitHub (see the
+  # factory config), and the hotspot still takes uploads during setup
+  ota: false
+  # Builds the login in; the real password is set on boot (see on_boot),
+  # this placeholder is never used. Digest, so the password is not sent in
+  # plain text.
+  auth:
+    type: digest
+    username: ${web_username}
+    password: set-on-boot
+  sorting_groups:
+    # Settings on top, with the save button right below the fields
+    - id: settings_group
+      name: Setup
+      sorting_weight: -10
+
+globals:
+  # Settings, persisted across reboots; strings as fixed-size buffers so they
+  # can be restored from flash (empty until set)
+  - id: mqtt_broker_cfg
+    type: char[64]
+    restore_value: true
+  - id: mqtt_port_cfg
+    type: uint16_t
+    restore_value: true
+    initial_value: "1883"
+  - id: mqtt_username_cfg
+    type: char[64]
+    restore_value: true
+  - id: mqtt_password_cfg
+    type: char[64]
+    restore_value: true
+  - id: hostname_cfg
+    type: char[32]
+    restore_value: true
+  - id: web_username_cfg
+    type: char[32]
+    restore_value: true
+  - id: web_password_cfg
+    type: char[64]
+    restore_value: true
+  # Host name in use until the next restart
+  - id: hostname_active
+    type: char[32]
+    restore_value: false
+  # User name the web page checks until the next restart
+  - id: web_username_active
+    type: char[32]
+    restore_value: false
+  # Password the web page checks until the next restart
+  - id: web_password_active
+    type: char[64]
+    restore_value: false
+  # Set once the settings window after plugging in has closed
+  - id: settings_locked
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # Uptime in ms at which the settings window closes
+  - id: settings_window_end
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  # Reason of the last failed MQTT connection, -1 = none
+  - id: mqtt_last_error
+    type: int
+    restore_value: false
+    initial_value: "-1"
+  # True once the MQTT client was started on boot
+  - id: mqtt_started
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # Refusal code from the broker's CONNACK (MQTT 3.1.1), -1 = none
+  - id: mqtt_refused_code
+    type: int
+    restore_value: false
+    initial_value: "-1"
+
+text_sensor:
+  - platform: template
+    id: mqtt_status
+    name: MQTT status
+    icon: mdi:lan-connect
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 0
+    update_interval: 5s
+    lambda: |-
+      if (id(mqtt_broker_cfg)[0] == '\0') return {"No broker set"};
+      if (id(web_password_cfg)[0] == '\0') return {"Set a web page password first"};
+      if (!id(mqtt_started)) return {"Press Save and restart"};
+      if (mqtt::global_mqtt_client->is_connected()) return {"Connected"};
+      switch (id(mqtt_refused_code)) {
+        case 1: return {"Rejected: protocol version"};
+        case 2: return {"Rejected: client ID"};
+        case 3: return {"Broker unavailable"};
+        case 4: return {"Rejected: check username and password"};
+        case 5: return {"Not authorized: check username and password"};
+        default: break;
+      }
+      switch (id(mqtt_last_error)) {
+        case 0: return {"Broker not reachable"};
+        case 1: return {"Rejected: protocol version"};
+        case 2: return {"Rejected: client ID"};
+        case 3: return {"Broker unavailable"};
+        case 4: return {"Rejected: check username and password"};
+        case 5: return {"Not authorized: check username and password"};
+        case 8: return {"Broker not found: check the host name"};
+        default: return {"Connecting"};
+      }
+    filters:
+      # Only send changes
+      - lambda: |-
+          static std::string last;
+          if (x == last) return {};
+          last = x;
+          return x;
+
+text:
+  - platform: template
+    id: mqtt_broker_text
+    name: MQTT broker
+    icon: mdi:server-network
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 1
+    mode: text
+    max_length: 63
+    update_interval: 60s
+    lambda: return std::string(id(mqtt_broker_cfg));
+    set_action:
+      - lambda: |-
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else {
+            auto &buf = id(mqtt_broker_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: mqtt_broker_text
+      - component.update: mqtt_status
+
+  # A text field rather than a number, so the page shows no range next to it
+  - platform: template
+    id: mqtt_port_text
+    name: MQTT port
+    icon: mdi:ethernet
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 2
+    mode: text
+    min_length: 1
+    max_length: 5
+    pattern: "[0-9]{1,5}"
+    update_interval: 60s
+    lambda: return std::to_string(id(mqtt_port_cfg));
+    set_action:
+      - lambda: |-
+          const unsigned long port = std::strtoul(x.c_str(), nullptr, 10);
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else if (port < 1 || port > 65535) {
+            ESP_LOGW("settings", "Invalid MQTT port '%s', use 1 to 65535", x.c_str());
+          } else {
+            id(mqtt_port_cfg) = (uint16_t) port;
+          }
+      - component.update: mqtt_port_text
+
+  - platform: template
+    id: mqtt_username_text
+    name: MQTT username
+    icon: mdi:account
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 3
+    mode: text
+    max_length: 63
+    update_interval: 60s
+    lambda: return std::string(id(mqtt_username_cfg));
+    set_action:
+      - lambda: |-
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else {
+            auto &buf = id(mqtt_username_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: mqtt_username_text
+
+  # The password is never shown or published, only whether one is set
+  - platform: template
+    id: mqtt_password_text
+    name: MQTT password
+    icon: mdi:form-textbox-password
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 4
+    mode: password
+    max_length: 63
+    update_interval: 60s
+    lambda: |-
+      return std::string(id(mqtt_password_cfg)[0] == '\0' ? "" : "********");
+    set_action:
+      - lambda: |-
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else if (x == "********") {
+            // The placeholder shown for a set password was sent back unchanged
+            ESP_LOGD("settings", "MQTT password unchanged");
+          } else {
+            auto &buf = id(mqtt_password_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: mqtt_password_text
+
+  # Name in the router (DHCP), of the hotspot and the .local address;
+  # empty = default name with the MAC suffix
+  - platform: template
+    id: hostname_text
+    name: Hostname
+    icon: mdi:rename
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 5
+    mode: text
+    max_length: 31
+    pattern: "[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+    update_interval: 60s
+    # The name set here, otherwise the name in use
+    lambda: |-
+      return id(hostname_cfg)[0] != '\0' ? std::string(id(hostname_cfg)) : App.get_name().str();
+    set_action:
+      - lambda: |-
+          bool valid = x.size() <= 31 && (x.empty() || (x.front() != '-' && x.back() != '-'));
+          for (char c : x) {
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) valid = false;
+          }
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else if (!valid) {
+            ESP_LOGW("settings", "Invalid host name '%s', use a-z, 0-9 and -", x.c_str());
+          } else {
+            auto &buf = id(hostname_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: hostname_text
+
+  # User name for the web page login; empty = "${web_username}"
+  - platform: template
+    id: web_username_text
+    name: Web page username
+    icon: mdi:account-lock
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 6
+    mode: text
+    max_length: 31
+    update_interval: 60s
+    lambda: |-
+      return std::string(id(web_username_cfg)[0] == '\0' ? "${web_username}" : id(web_username_cfg));
+    set_action:
+      - lambda: |-
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else if (x.find(':') != std::string::npos || x.size() > 31) {
+            ESP_LOGW("settings", "Invalid user name, use up to 31 characters without ':'");
+          } else {
+            auto &buf = id(web_username_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: web_username_text
+
+  # Protects the web page; required before the device connects to MQTT
+  - platform: template
+    id: web_password_text
+    name: Web page password
+    icon: mdi:lock
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 7
+    mode: password
+    max_length: 63
+    update_interval: 60s
+    lambda: |-
+      return std::string(id(web_password_cfg)[0] == '\0' ? "" : "********");
+    set_action:
+      - lambda: |-
+          if (id(settings_locked)) {
+            ESP_LOGW("settings", "Settings are locked, unplug the device and plug it back in to change them");
+          } else if (x == "********") {
+            ESP_LOGD("settings", "Web page password unchanged");
+          } else if (x.empty()) {
+            ESP_LOGW("settings", "The web page password cannot be removed, set a new one instead");
+          } else if (x.size() < 8) {
+            ESP_LOGW("settings", "The web page password needs at least 8 characters");
+          } else {
+            auto &buf = id(web_password_cfg);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, x.c_str(), sizeof(buf) - 1);
+          }
+      - component.update: web_password_text
+      - component.update: mqtt_status
+
+button:
+  # Saves the settings and restarts, so they take effect
+  - platform: template
+    id: save_restart_button
+    name: Save and restart
+    icon: mdi:content-save
+    entity_category: config
+    web_server:
+      sorting_group_id: settings_group
+      sorting_weight: 9
+    on_press:
+      - if:
+          condition:
+            lambda: return !id(settings_locked) && id(web_password_cfg)[0] == '\0';
+          then:
+            - logger.log:
+                level: WARN
+                format: "Set a web page password first"
+      - if:
+          condition:
+            lambda: return !id(settings_locked) && id(web_password_cfg)[0] != '\0';
+          then:
+            - logger.log: "Saving the settings and restarting"
+            # Give the globals a loop to store their values, then write them to flash
+            - delay: 1s
+            - lambda: |-
+                // Hand the rest of the settings window over to the next boot
+                const uint32_t now = millis();
+                if (!id(settings_locked) && now < id(settings_window_end)) {
+                  settings_window_left_ms = id(settings_window_end) - now;
+                  settings_window_magic = SETTINGS_WINDOW_MAGIC;
+                }
+                global_preferences->sync();
+                App.safe_reboot();
+      - if:
+          condition:
+            lambda: return id(settings_locked);
+          then:
+            - logger.log:
+                level: WARN
+                format: "Settings are locked, unplug the device and plug it back in to change them"

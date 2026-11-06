@@ -26,9 +26,12 @@ jobs:
     uses: esphome/workflows/.github/workflows/build-to-draft-release.yml@31d160e5f0ffa0ee65d5b27cb55c153d415f2abe  # 2026.10.2
     with:
       #### Modify below here to match your project ####
-      # Every *.factory.yaml in the repo is discovered automatically; the
-      # builds are combined into a single manifest published under this name.
-      # Remove combined-name to publish one manifest per file instead.
-      combined-name: gas-connect-diy
+      # One manifest per variant. The name of the Home Assistant variant must
+      # stay gas-connect-diy: installed devices look for updates under it.
+      groups: >-
+        [
+          {"name": "gas-connect-diy", "files": ["gas-connect.factory.yaml"]},
+          {"name": "gas-connect-diy-mqtt", "files": ["gas-connect-mqtt.factory.yaml"]}
+        ]
       esphome-version: 2026.10.0
       #### Modify above here to match your project ####
