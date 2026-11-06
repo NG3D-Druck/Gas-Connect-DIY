@@ -8,6 +8,11 @@
   html[data-ui-lang="de"] [data-lang="en"],
   html[data-ui-lang="en"] [data-lang="de"] { display: none !important; }
   html:not([data-ui-lang]) [data-lang="de"] { display: none !important; }
+  .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 1em 0; }
+  .guide-button {
+    display: inline-block; padding: 8px 16px; border: 2px solid currentColor; border-radius: 4px;
+    font-weight: bold; text-decoration: none;
+  }
 </style>
 
 <div class="lang-toggle">
@@ -94,6 +99,7 @@ Hinzufügen nach einem Verschlüsselungsschlüssel.
 
 </div>
 
+<div class="button-row">
 <esp-web-install-button manifest="firmware/gas-connect-diy.manifest.json">
   <button slot="activate">
     <span data-lang="en">Install</span><span data-lang="de">Installieren</span>
@@ -107,6 +113,8 @@ Hinzufügen nach einem Verschlüsselungsschlüssel.
     <span data-lang="de">Die Installation ist nur über eine sichere (HTTPS-)Seite möglich.</span>
   </span>
 </esp-web-install-button>
+  <a class="guide-button" href="kurzanleitung.html#ha"><span data-lang="en">Quick guide</span><span data-lang="de">Kurzanleitung</span></a>
+</div>
 
 <p data-lang="en"><small>Note: the dialogs of the installer itself are provided by ESP Web Tools and are only available in English.</small></p>
 <p data-lang="de"><small>Hinweis: Die Dialoge des Installers selbst stammen von ESP Web Tools und sind nur auf Englisch verfügbar.</small></p>
@@ -142,7 +150,7 @@ It is the same version the web installer uses.
 
 - [gas-connect-diy-esp32c3.factory.bin](firmware/gas-connect-diy-esp32c3.factory.bin) (version <span class="fw-version">see release</span>):
   complete image for the first installation, flash it to address **0x0**
-- [SHA-256 checksum](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [all versions on GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases)
+- [SHA-256 checksum](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [all versions on GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases) · [quick guide](kurzanleitung.html)
 
 ## Flash with ESP-Flasher (graphical tool)
 
@@ -180,8 +188,9 @@ installing Python.
 `sha256sum gas-connect-diy-esp32c3.factory.bin` (Linux/macOS) must show the value from the checksum file.
 
 **Updates** don't need a download: Home Assistant shows new firmware under *Settings → Updates* and installs it
-over Wi-Fi. Reinstalling the factory image over USB can reset the meter reading and the encryption key. Note your
-meter reading first; if Home Assistant asks for a key afterwards, remove the device and add it again.
+over Wi-Fi. Reinstalling the factory image over USB at 0x0 keeps Wi-Fi, settings and the meter reading; only erasing
+the device (e.g. `esptool erase-flash`) deletes them. If Home Assistant asks for a key afterwards, remove the device
+and add it again.
 
 </div>
 
@@ -194,7 +203,7 @@ Firmware zum Herunterladen. Es ist dieselbe Version, die der Web-Installer aufsp
 
 - [gas-connect-diy-esp32c3.factory.bin](firmware/gas-connect-diy-esp32c3.factory.bin) (Version <span class="fw-version">siehe Release</span>):
   vollständiges Abbild für die erste Installation, wird an Adresse **0x0** geschrieben
-- [SHA-256-Prüfsumme](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [alle Versionen auf GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases)
+- [SHA-256-Prüfsumme](firmware/gas-connect-diy-esp32c3.factory.bin.sha256) · [alle Versionen auf GitHub](https://github.com/NG3D-Druck/Gas-Connect-DIY/releases) · [Kurzanleitung](kurzanleitung.html)
 
 ## Mit ESP-Flasher flashen (mit Oberfläche)
 
@@ -232,11 +241,113 @@ mit `pip install esptool` oder die Version ohne Python von den
 `sha256sum gas-connect-diy-esp32c3.factory.bin` (Linux/macOS) muss den Wert aus der Prüfsummen-Datei zeigen.
 
 **Für Updates** brauchst du keinen Download: Home Assistant zeigt neue Firmware unter *Einstellungen → Updates*
-an und installiert sie per WLAN. Ein erneutes Aufspielen per USB kann Zählerstand und Verschlüsselungsschlüssel
-zurücksetzen. Notiere vorher deinen Zählerstand. Fragt Home Assistant danach nach einem Schlüssel, das Gerät
-entfernen und neu hinzufügen.
+an und installiert sie per WLAN. Ein erneutes Aufspielen per USB an 0x0 behält WLAN, Einstellungen und Zählerstand;
+nur Löschen des Geräts (z. B. `esptool erase-flash`) entfernt sie. Fragt Home Assistant danach nach einem Schlüssel,
+das Gerät entfernen und neu hinzufügen.
 
 </div>
+
+<div data-lang="en" markdown="1">
+
+# MQTT version (without Home Assistant)
+
+For openHAB, ioBroker, Node-RED, FHEM and other systems with an MQTT broker. It has the same values and settings
+as the Home Assistant version. You enter the broker on the web page of the device.
+
+1. **Install:** flash mode as above (hold **BOOT**, plug in, release), then click **Install MQTT version** below.
+   Unplug the device and plug it back in without **BOOT**.
+2. **Set up Wi-Fi:** click **Install MQTT version** again and choose **Configure Wi-Fi**, or use the hotspot
+   `gas-connect-diy-mqtt-xxxxxx` (`http://192.168.4.1`).
+3. **Enter the broker within 15 minutes after plugging in:** open `http://gas-connect-diy-mqtt-xxxxxx.local`
+   (or the IP address from your router). Enter **MQTT broker** (host name or IP), **MQTT port** (usually 1883),
+   **MQTT username** and **MQTT password** in the **Setup** section, plus a **Web page password** (at least
+   8 characters, required) and optionally a **Web page username** (default `admin`) and a **Hostname** (name in the
+   router and `http://<hostname>.local`, a-z, 0-9 and -). Then click **Save and restart**. The device restarts and
+   connects; **MQTT status** shows whether it worked or what went wrong (e.g. wrong password).
+4. **Add it to your system:** the device announces its values via MQTT discovery (prefix `homeassistant`).
+   - openHAB: install the MQTT binding and add your broker as a Thing. The device then shows up in the inbox.
+   - ioBroker, Node-RED, FHEM: subscribe to `gas-connect-diy-mqtt-xxxxxx/#`, e.g. the meter reading
+     `gas-connect-diy-mqtt-xxxxxx/sensor/gas_meter_reading/state`.
+5. **Set the meter reading:** on the web page of the device or by sending the value to
+   `gas-connect-diy-mqtt-xxxxxx/number/set_meter_reading/command`. Set **Pulse volume** there too if needed.
+
+**The settings in Setup are locked 15 minutes after plugging in.** **Save and restart** keeps them open until the 15 minutes are up; any other restart (web page, MQTT, update) does not
+unlock them. To change them later, unplug the device briefly and plug it back in. Meter reading,
+pulse volume, debounce time and LED mode can be changed at any time. Passwords are never shown or sent via MQTT.
+
+**Web page password:** the device only connects to MQTT once one is set, and it cannot be removed, only changed.
+Forgot it? Unplug the device and plug it back in, then within 15 minutes send a new password (at least 8 characters)
+to `gas-connect-diy-mqtt-xxxxxx/text/web_page_password/command` and `PRESS` to
+`gas-connect-diy-mqtt-xxxxxx/button/save_and_restart/command`.
+
+**LED:** blue blinking = no Wi-Fi, yellow blinking = no connection to the MQTT broker.
+
+**Updates:** the web page of the device shows new firmware under **Firmware** with an install button.
+
+</div>
+
+<div data-lang="de" markdown="1">
+
+# MQTT-Version (ohne Home Assistant)
+
+Für openHAB, ioBroker, Node-RED, FHEM und andere Systeme mit MQTT-Broker. Sie hat dieselben Werte und Einstellungen
+wie die Home-Assistant-Version. Den Broker trägst du auf der Webseite des Geräts ein.
+
+1. **Installieren:** Flash-Modus wie oben (**BOOT** halten, einstecken, loslassen), dann unten auf
+   **MQTT-Version installieren** klicken. Danach das Gerät ab- und ohne **BOOT** wieder einstecken.
+2. **WLAN einrichten:** erneut auf **MQTT-Version installieren** klicken und **Configure Wi-Fi** wählen, oder über
+   den Hotspot `gas-connect-diy-mqtt-xxxxxx` (`http://192.168.4.1`).
+3. **Broker innerhalb von 15 Minuten nach dem Einstecken eintragen:** `http://gas-connect-diy-mqtt-xxxxxx.local`
+   öffnen (oder die IP-Adresse aus deinem Router). **MQTT broker** (Hostname oder IP), **MQTT port** (meist 1883),
+   **MQTT username** und **MQTT password** im Bereich **Setup** eintragen, dazu ein **Web page password**
+   (mindestens 8 Zeichen, Pflicht) und wahlweise einen **Web page username** (Standard `admin`) und einen **Hostname**
+   (Name im Router und `http://<hostname>.local`, a-z, 0-9 und -). Dann auf **Save and restart** klicken. Das Gerät
+   startet neu und verbindet sich; **MQTT status** zeigt, ob es geklappt hat oder was nicht stimmt (z. B. falsches
+   Passwort).
+4. **In dein System einbinden:** Das Gerät meldet seine Werte per MQTT-Discovery (Präfix `homeassistant`).
+   - openHAB: das MQTT-Binding installieren und deinen Broker als Thing anlegen. Das Gerät erscheint dann im Eingang.
+   - ioBroker, Node-RED, FHEM: `gas-connect-diy-mqtt-xxxxxx/#` abonnieren, z. B. den Zählerstand unter
+     `gas-connect-diy-mqtt-xxxxxx/sensor/gas_meter_reading/state`.
+5. **Zählerstand setzen:** auf der Webseite des Geräts oder per MQTT an
+   `gas-connect-diy-mqtt-xxxxxx/number/set_meter_reading/command` schicken. Dort bei Bedarf auch **Pulse volume**
+   einstellen.
+
+**Die Einstellungen unter Setup sind 15 Minuten nach dem Einstecken gesperrt.** **Save and restart** lässt sie offen, bis die 15 Minuten um
+sind; ein anderer Neustart (Webseite, MQTT, Update) entsperrt sie nicht. Um sie später zu ändern, das Gerät kurz ab- und wieder anstecken.
+Zählerstand, Impulswert, Entprellzeit und LED-Modus lassen sich jederzeit ändern. Passwörter werden nie angezeigt und
+nie per MQTT verschickt.
+
+**Webseiten-Passwort:** Das Gerät verbindet sich erst mit MQTT, wenn eins gesetzt ist. Entfernen lässt es sich nicht,
+nur ändern. Passwort vergessen? Das Gerät ab- und wieder anstecken und innerhalb von 15 Minuten ein neues Passwort
+(mindestens 8 Zeichen) an
+`gas-connect-diy-mqtt-xxxxxx/text/web_page_password/command` und `PRESS` an
+`gas-connect-diy-mqtt-xxxxxx/button/save_and_restart/command` schicken.
+
+**LED:** blau blinkend = kein WLAN, gelb blinkend = keine Verbindung zum MQTT-Broker.
+
+**Updates:** Die Webseite des Geräts zeigt neue Firmware unter **Firmware** mit einem Button zum Installieren an.
+
+</div>
+
+<div class="button-row">
+<esp-web-install-button manifest="firmware/gas-connect-diy-mqtt.manifest.json">
+  <button slot="activate">
+    <span data-lang="en">Install MQTT version</span><span data-lang="de">MQTT-Version installieren</span>
+  </button>
+  <span slot="unsupported">
+    <span data-lang="en">Your browser does not support installing via USB. Please use Google Chrome or Microsoft Edge on a desktop computer.</span>
+    <span data-lang="de">Dein Browser unterstützt keine Installation per USB. Bitte nutze Google Chrome oder Microsoft Edge auf einem Desktop-Computer.</span>
+  </span>
+  <span slot="not-allowed">
+    <span data-lang="en">The installation is only possible from a secure (HTTPS) page.</span>
+    <span data-lang="de">Die Installation ist nur über eine sichere (HTTPS-)Seite möglich.</span>
+  </span>
+</esp-web-install-button>
+  <a class="guide-button" href="kurzanleitung.html#mqtt"><span data-lang="en">Quick guide</span><span data-lang="de">Kurzanleitung</span></a>
+</div>
+
+<p data-lang="en"><small>Download for flashing with a tool: <a href="firmware/gas-connect-diy-mqtt-esp32c3.factory.bin">gas-connect-diy-mqtt-esp32c3.factory.bin</a> (<a href="firmware/gas-connect-diy-mqtt-esp32c3.factory.bin.sha256">SHA-256</a>), flash it to address 0x0 as described above.</small></p>
+<p data-lang="de"><small>Download zum Flashen mit einem Programm: <a href="firmware/gas-connect-diy-mqtt-esp32c3.factory.bin">gas-connect-diy-mqtt-esp32c3.factory.bin</a> (<a href="firmware/gas-connect-diy-mqtt-esp32c3.factory.bin.sha256">SHA-256</a>), wie oben beschrieben an Adresse 0x0 schreiben.</small></p>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
