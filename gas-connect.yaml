@@ -23,6 +23,7 @@ esphome:
             id(gas_pulse_meter).set_total_pulses(id(gas_total_pulses));
             id(gas_pulse_meter).set_filter_us(id(reed_debounce).state * 1000);
             id(gas_total_restored) = true;
+            id(stats_reset_status).publish_state("Ready");
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -104,6 +105,12 @@ globals:
     type: float
     restore_value: true
     initial_value: "NAN"
+  # Uptime in ms until which a second press of "Reset statistics" confirms
+  # the reset; 0 = not armed
+  - id: stats_reset_armed_until
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
   # True while the LED briefly flashes for a pulse
   - id: led_flash
     type: bool
@@ -300,6 +307,13 @@ sensor:
     entity_category: diagnostic
 
 text_sensor:
+  # Feedback for the "Reset statistics" button, which needs a second press
+  - platform: template
+    id: stats_reset_status
+    name: Reset statistics status
+    icon: mdi:restore-alert
+    entity_category: diagnostic
+
   # Uptime as e.g. "2d 3h 15m"; updated every minute, so without seconds
   - platform: uptime
     id: uptime_sensor
@@ -443,3 +457,41 @@ button:
     id: restart_button
     name: Restart
     entity_category: config
+
+  # Sets today, this month and this year back to 0 and yesterday to unknown,
+  # e.g. after testing the reed contact with a magnet. The meter reading stays.
+  # ESPHome cannot show a dialog, so the first press only asks for
+  # confirmation; a second press within 10 s resets.
+  - platform: template
+    id: stats_reset_button
+    name: Reset statistics
+    icon: mdi:restore
+    entity_category: config
+    on_press:
+      - lambda: |-
+          const uint32_t now = millis();
+          if (id(stats_reset_armed_until) == 0 || (int32_t) (now - id(stats_reset_armed_until)) > 0) {
+            id(stats_reset_armed_until) = now + 10000;
+            id(stats_reset_status).publish_state("Are you sure? Press again within 10 s to reset");
+            ESP_LOGW("stats", "Press \"Reset statistics\" again within 10 s to reset today, month and year");
+            return;
+          }
+          id(stats_reset_armed_until) = 0;
+          const uint32_t pulses = id(gas_total_pulses);
+          id(gas_day_base) = pulses;
+          id(gas_month_base) = pulses;
+          id(gas_year_base) = pulses;
+          id(gas_yesterday) = NAN;
+          id(stats_reset_status).publish_state("Statistics reset");
+          ESP_LOGI("stats", "Today, this month and this year reset to 0, the meter reading stays");
+      - component.update: gas_today
+      - component.update: gas_this_month
+      - component.update: gas_this_year
+      - component.update: gas_yesterday_sensor
+      # Back to "Ready" once the confirmation time is over
+      - delay: 11s
+      - lambda: |-
+          if (id(stats_reset_armed_until) == 0 || (int32_t) (millis() - id(stats_reset_armed_until)) > 0) {
+            id(stats_reset_armed_until) = 0;
+            id(stats_reset_status).publish_state("Ready");
+          }

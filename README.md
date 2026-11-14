@@ -31,6 +31,7 @@ Jede Umdrehung der letzten Rollenziffer erzeugt einen Impuls. Wie viel Gas das i
   verringern, wenn bei hohem Durchfluss Impulse fehlen
 - **Reed contact** (Diagnose) - aktueller Zustand des Kontakts, hilfreich beim Ausrichten des Sensors
 - **LED mode** - was die LED anzeigt: **Status + pulse** (Standard), **Status only** oder **Off**
+- **Reset statistics** - setzt heute, Monat und Jahr auf 0 und gestern auf unbekannt, z. B. nach dem Test mit einem Magneten; der Zählerstand bleibt. Sicherheitsabfrage: Der erste Druck fragt nach (**Reset statistics status**: „Are you sure? …“), erst ein zweiter Druck innerhalb von 10 s setzt zurück
 - **Restart**, **WiFi signal**, **Uptime**
 - **Firmware**-Update (nur in der Werks-Firmware, entfällt nach der Übernahme im ESPHome Device Builder)
 
@@ -127,6 +128,7 @@ Each revolution of the last drum digit creates one pulse. How much gas that is i
   lower it if pulses are missed at high flow
 - **Reed contact** (diagnostic) - live contact state, useful when aligning the sensor
 - **LED mode** - what the LED shows: **Status + pulse** (default), **Status only** or **Off**
+- **Reset statistics** - sets today, this month and this year to 0 and yesterday to unknown, e.g. after testing with a magnet; the meter reading stays. Confirmation: the first press asks (**Reset statistics status**: "Are you sure? …"), only a second press within 10 s resets
 - **Restart**, **WiFi signal**, **Uptime**
 - **Firmware** update (factory firmware only, gone after taking control in the ESPHome Device Builder)
 
