@@ -33,5 +33,5 @@ jobs:
           {"name": "gas-connect-diy", "files": ["gas-connect.factory.yaml"]},
           {"name": "gas-connect-diy-mqtt", "files": ["gas-connect-mqtt.factory.yaml"]}
         ]
-      esphome-version: 2026.10.0
+      esphome-version: 2026.10.2
       #### Modify above here to match your project ####
