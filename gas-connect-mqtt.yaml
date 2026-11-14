@@ -175,6 +175,10 @@ web_server:
     - id: settings_group
       name: Setup
       sorting_weight: -10
+    # Reset button with its confirmation line right below it
+    - id: stats_group
+      name: Statistics
+      sorting_weight: 10
 
 globals:
   # Settings, persisted across reboots; strings as fixed-size buffers so they
@@ -240,6 +244,12 @@ globals:
     initial_value: "-1"
 
 text_sensor:
+  # Confirmation line right below the "Reset statistics" button
+  - id: !extend stats_reset_status
+    web_server:
+      sorting_group_id: stats_group
+      sorting_weight: 1
+
   - platform: template
     id: mqtt_status
     name: MQTT status
@@ -477,6 +487,11 @@ text:
       - component.update: mqtt_status
 
 button:
+  - id: !extend stats_reset_button
+    web_server:
+      sorting_group_id: stats_group
+      sorting_weight: 0
+
   # Saves the settings and restarts, so they take effect
   - platform: template
     id: save_restart_button
