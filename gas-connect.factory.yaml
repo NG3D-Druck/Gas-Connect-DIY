@@ -8,6 +8,50 @@ esphome:
   project:
     name: ng3d.gas-connect-diy
     version: dev  # This will be replaced by the github workflows with the `release` version
+  on_boot:
+    # Plaintext uploads on the OTA port have no password in this firmware, so
+    # anyone in the network could flash it. They stay open for the adoption in
+    # the ESPHome Device Builder only during the first 15 minutes after
+    # plugging the device in (EN 18031, like the provisioning window); any
+    # other restart (OTA, update, Restart button) keeps them closed. Updates
+    # via the Firmware entity (http_request) are not affected.
+    - priority: 600
+      then:
+        - lambda: |-
+            const auto reason = esp_reset_reason();
+            id(ota_plaintext_window) = reason == ESP_RST_POWERON || reason == ESP_RST_USB;
+            if (id(ota_plaintext_window)) {
+              ESP_LOGW("ota", "Plaintext OTA uploads are open for 15 min (adoption window)");
+            } else {
+              id(ota_close_plaintext).execute();
+            }
+        - if:
+            condition:
+              lambda: return id(ota_plaintext_window);
+            then:
+              - delay: 15min
+              - script.execute: ota_close_plaintext
+
+globals:
+  # True while plaintext OTA uploads are allowed after plugging the device in
+  - id: ota_plaintext_window
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+script:
+  # Closes plaintext OTA uploads with a random password nobody knows; uploads
+  # authenticated with the provisioned API encryption key keep working
+  - id: ota_close_plaintext
+    then:
+      - lambda: |-
+          char random_password[33];
+          for (int i = 0; i < 16; i++) {
+            snprintf(random_password + i * 2, 3, "%02x", (unsigned) (esp_random() & 0xff));
+          }
+          id(esphome_ota).set_auth_password(random_password);
+          id(ota_plaintext_window) = false;
+          ESP_LOGI("ota", "Plaintext OTA uploads are closed until the device is plugged in again");
 
 # This should point to the public location of the yaml file that will be adopted.
 # In this case it is the core yaml file that does not contain the extra things
@@ -28,6 +72,10 @@ improv_serial:
 http_request:
 
 ota:
+  # An empty password builds in the password check, so the on_boot actions
+  # above can close plaintext uploads at runtime
+  - id: !extend esphome_ota
+    password: ""
   - platform: http_request
 
 update:
