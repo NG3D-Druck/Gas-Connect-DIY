@@ -210,7 +210,7 @@ script:
           id(cost_billing_anchor) = anchor;
           id(cost_key)[gas_costs::BILLING] = 0;
           id(cost_complete)[gas_costs::BILLING] = false;
-          ESP_LOGI("costs", "New billing year start, please set \"Zählerstand Beginn Abrechnungsjahr\" again");
+          ESP_LOGI("costs", "New billing year start, please set the billing year start reading again");
       - script.execute: gas_cost_update
       - script.execute: gas_cost_publish
       - component.update: gas_billing_start_reading
@@ -310,7 +310,7 @@ sensor:
 
   - platform: template
     id: gas_power
-    name: Gas Leistung
+    name: Gas power
     unit_of_measurement: kW
     device_class: power
     state_class: measurement
@@ -322,7 +322,7 @@ sensor:
   # this year come from gas-connect.yaml
   - platform: template
     id: gas_week
-    name: Gas diese Woche
+    name: Gas this week
     update_interval: never
     unit_of_measurement: "m³"
     device_class: gas
@@ -331,7 +331,7 @@ sensor:
     icon: mdi:calendar-week
   - platform: template
     id: gas_last_week
-    name: Gas letzte Woche
+    name: Gas last week
     update_interval: never
     unit_of_measurement: "m³"
     device_class: gas
@@ -339,7 +339,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_last_month
-    name: Gas letzter Monat
+    name: Gas last month
     update_interval: never
     unit_of_measurement: "m³"
     device_class: gas
@@ -347,7 +347,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_last_year
-    name: Gas letztes Jahr
+    name: Gas last year
     update_interval: never
     unit_of_measurement: "m³"
     device_class: gas
@@ -355,7 +355,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_billing_year
-    name: Gas Abrechnungsjahr
+    name: Gas billing year
     update_interval: never
     unit_of_measurement: "m³"
     device_class: gas
@@ -366,7 +366,7 @@ sensor:
   # Energy in kWh: m³ × calorific value × z-number
   - platform: template
     id: gas_energy
-    name: Gas Energie
+    name: Gas energy
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -375,7 +375,7 @@ sensor:
     icon: mdi:lightning-bolt
   - platform: template
     id: gas_energy_today
-    name: Gas Energie heute
+    name: Gas energy today
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -384,7 +384,7 @@ sensor:
     icon: mdi:calendar-today
   - platform: template
     id: gas_energy_yesterday
-    name: Gas Energie gestern
+    name: Gas energy yesterday
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -392,7 +392,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_energy_week
-    name: Gas Energie diese Woche
+    name: Gas energy this week
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -401,7 +401,7 @@ sensor:
     icon: mdi:calendar-week
   - platform: template
     id: gas_energy_month
-    name: Gas Energie dieser Monat
+    name: Gas energy this month
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -410,7 +410,7 @@ sensor:
     icon: mdi:calendar-month
   - platform: template
     id: gas_energy_year
-    name: Gas Energie dieses Jahr
+    name: Gas energy this year
     update_interval: never
     unit_of_measurement: kWh
     device_class: energy
@@ -421,7 +421,7 @@ sensor:
   # Costs in EUR including the base price; unknown until the energy price is set
   - platform: template
     id: gas_cost_today
-    name: Gaskosten heute
+    name: Gas cost today
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -429,7 +429,7 @@ sensor:
     icon: mdi:calendar-today
   - platform: template
     id: gas_cost_yesterday
-    name: Gaskosten gestern
+    name: Gas cost yesterday
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -437,7 +437,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_cost_week
-    name: Gaskosten diese Woche
+    name: Gas cost this week
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -445,7 +445,7 @@ sensor:
     icon: mdi:calendar-week
   - platform: template
     id: gas_cost_last_week
-    name: Gaskosten letzte Woche
+    name: Gas cost last week
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -453,7 +453,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_cost_month
-    name: Gaskosten dieser Monat
+    name: Gas cost this month
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -461,7 +461,7 @@ sensor:
     icon: mdi:calendar-month
   - platform: template
     id: gas_cost_last_month
-    name: Gaskosten letzter Monat
+    name: Gas cost last month
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -469,7 +469,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_cost_year
-    name: Gaskosten dieses Jahr
+    name: Gas cost this year
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -477,7 +477,7 @@ sensor:
     icon: mdi:calendar-blank
   - platform: template
     id: gas_cost_last_year
-    name: Gaskosten letztes Jahr
+    name: Gas cost last year
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -485,7 +485,7 @@ sensor:
     icon: mdi:calendar-arrow-left
   - platform: template
     id: gas_cost_billing_year
-    name: Gaskosten Abrechnungsjahr
+    name: Gas cost billing year
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -495,7 +495,7 @@ sensor:
   # Billing year of the gas supplier
   - platform: template
     id: gas_installments_paid
-    name: Abschläge bisher
+    name: Installments paid
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -503,7 +503,7 @@ sensor:
     icon: mdi:cash-check
   - platform: template
     id: gas_balance
-    name: Saldo
+    name: Billing balance
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -511,7 +511,7 @@ sensor:
     icon: mdi:scale-balance
   - platform: template
     id: gas_cost_forecast_month
-    name: Prognose Gaskosten Monat
+    name: Gas cost forecast this month
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -519,7 +519,7 @@ sensor:
     icon: mdi:chart-line
   - platform: template
     id: gas_cost_forecast_billing_year
-    name: Prognose Gaskosten Abrechnungsjahr
+    name: Gas cost forecast billing year
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -527,7 +527,7 @@ sensor:
     icon: mdi:chart-line
   - platform: template
     id: gas_balance_forecast
-    name: Prognose Saldo
+    name: Billing balance forecast
     update_interval: never
     unit_of_measurement: EUR
     device_class: monetary
@@ -538,7 +538,7 @@ number:
   # From the gas bill: kWh = m³ × calorific value × z-number
   - platform: template
     id: gas_calorific_value
-    name: Brennwert
+    name: Calorific value
     icon: mdi:fire-circle
     entity_category: config
     unit_of_measurement: kWh/m³
@@ -551,7 +551,7 @@ number:
     restore_value: true
   - platform: template
     id: gas_z_number
-    name: Zustandszahl
+    name: Z-number
     icon: mdi:thermometer-lines
     entity_category: config
     mode: box
@@ -565,7 +565,7 @@ number:
   # Prices from the gas contract, gross; 0 = not set, costs stay unknown
   - platform: template
     id: gas_energy_price
-    name: Arbeitspreis
+    name: Energy price
     icon: mdi:currency-eur
     entity_category: config
     unit_of_measurement: ct/kWh
@@ -585,7 +585,7 @@ number:
           if (first) id(gas_cost_recalculate).execute();
   - platform: template
     id: gas_base_price
-    name: Grundpreis
+    name: Base price
     icon: mdi:currency-eur
     entity_category: config
     unit_of_measurement: EUR/year
@@ -601,7 +601,7 @@ number:
   # meter reading at the start (from the last bill)
   - platform: template
     id: gas_installment
-    name: Monatlicher Abschlag
+    name: Monthly installment
     icon: mdi:cash-clock
     entity_category: config
     unit_of_measurement: EUR
@@ -614,7 +614,7 @@ number:
     restore_value: true
   - platform: template
     id: gas_billing_start_day
-    name: Abrechnungsjahr Starttag
+    name: Billing year start day
     icon: mdi:calendar-start
     entity_category: config
     mode: box
@@ -628,7 +628,7 @@ number:
       - script.execute: gas_billing_start_changed
   - platform: template
     id: gas_billing_start_month
-    name: Abrechnungsjahr Startmonat
+    name: Billing year start month
     icon: mdi:calendar-start
     entity_category: config
     mode: box
@@ -642,7 +642,7 @@ number:
       - script.execute: gas_billing_start_changed
   - platform: template
     id: gas_billing_start_reading
-    name: Zählerstand Beginn Abrechnungsjahr
+    name: Billing year start reading
     icon: mdi:counter
     entity_category: config
     unit_of_measurement: "m³"
@@ -673,7 +673,7 @@ number:
 button:
   - platform: template
     id: gas_cost_recalculate_button
-    name: Kosten neu berechnen
+    name: Recalculate costs
     icon: mdi:calculator-variant
     entity_category: config
     on_press:
