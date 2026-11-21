@@ -1,0 +1,680 @@
+# Energy, costs and billing year for Gas Connect DIY
+#
+# Package next to the unchanged gas-connect.yaml. Use it in your own config:
+#   packages:
+#     core: !include gas-connect.yaml
+#     costs: !include gas-costs.yaml
+#
+# Adds energy in kWh, costs per day/week/month/year, the consumption of the
+# previous periods and, for the billing year of the gas supplier, the
+# installments paid, the balance and forecasts.
+#
+# How it counts: every new pulse is converted with the settings valid at that
+# moment (calorific value, z-number, energy price). A new price therefore only
+# applies to consumption from then on, like on the gas bill. The base price is
+# added per day begun with the base price set when the costs are shown.
+#
+# The consumption increase is taken from "Gas today" of gas-connect.yaml,
+# which "Set meter reading" and "Pulse volume" leave unchanged; "Reset
+# statistics" sets today, this week, this month and this year to 0 here as
+# well, but not the billing year.
+
+esphome:
+  includes:
+    - gas-costs.h
+  on_boot:
+    - priority: -200
+      then:
+        - script.execute: gas_cost_update
+        - script.execute: gas_cost_publish
+
+globals:
+  # Per period (index gas_costs::Period: day, week, month, year, billing year)
+  # Consumption in m³, energy in kWh and energy price part of the costs in EUR
+  # of the current period
+  - id: cost_m3
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{}"
+  - id: cost_kwh
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{}"
+  - id: cost_work
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{}"
+  # The same for the previous period, costs including the base price;
+  # NAN if unknown
+  - id: cost_prev_m3
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{NAN, NAN, NAN, NAN, NAN}"
+  - id: cost_prev_kwh
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{NAN, NAN, NAN, NAN, NAN}"
+  - id: cost_prev_eur
+    type: std::array<double, 5>
+    restore_value: true
+    initial_value: "std::array<double, 5>{NAN, NAN, NAN, NAN, NAN}"
+  # Key of the current period (see gas_costs::period_key), 0 = not set yet,
+  # waiting for the first time sync
+  - id: cost_key
+    type: std::array<uint32_t, 5>
+    restore_value: true
+    initial_value: "std::array<uint32_t, 5>{}"
+  # Whether the current period was counted from its start; forecasts and the
+  # balance need this
+  - id: cost_complete
+    type: std::array<bool, 5>
+    restore_value: true
+    initial_value: "std::array<bool, 5>{}"
+  # Energy since the firmware was installed, for the Home Assistant energy dashboard
+  - id: energy_total
+    type: double
+    restore_value: true
+    initial_value: "0"
+  # "Gas today" in m³, its day and the pulse volume at the last check
+  - id: cost_last_today
+    type: double
+    restore_value: true
+    initial_value: "NAN"
+  - id: cost_last_day_key
+    type: uint32_t
+    restore_value: true
+    initial_value: "0"
+  - id: cost_last_volume
+    type: double
+    restore_value: true
+    initial_value: "0"
+  # Last energy price and billing year start (month * 100 + day) seen, to
+  # detect changes of these settings
+  - id: cost_last_price
+    type: float
+    restore_value: true
+    initial_value: "0"
+  - id: cost_billing_anchor
+    type: uint32_t
+    restore_value: true
+    initial_value: "101"
+
+time:
+  - id: !extend homeassistant_time
+    on_time_sync:
+      - script.execute: gas_cost_update
+      - script.execute: gas_cost_publish
+  - id: !extend sntp_time
+    on_time_sync:
+      - script.execute: gas_cost_update
+      - script.execute: gas_cost_publish
+
+interval:
+  - interval: 60s
+    then:
+      - script.execute: gas_cost_update
+      - script.execute: gas_cost_publish
+
+script:
+  # Starts new periods and adds the consumption since the last check
+  - id: gas_cost_update
+    then:
+      - lambda: |-
+          using namespace gas_costs;
+          if (!id(gas_total_restored)) return;
+          auto &m3 = id(cost_m3);
+          auto &kwh = id(cost_kwh);
+          auto &work = id(cost_work);
+          auto &key = id(cost_key);
+          auto &complete = id(cost_complete);
+          const int start_month = (int) id(gas_billing_start_month).state;
+          const int start_day = (int) id(gas_billing_start_day).state;
+          const double price = id(gas_energy_price).state / 100.0;  // ct -> EUR
+          const double daily_base = id(gas_base_price).state / 365.0;
+
+          // New day, week, month, year or billing year
+          auto now = id(sntp_time).now();
+          if (now.is_valid()) {
+            for (int p = 0; p < PERIOD_COUNT; p++) {
+              const uint32_t k = period_key(p, now.year, now.month, now.day_of_month, now.day_of_week,
+                                            start_month, start_day);
+              if (key[p] == k) continue;
+              // Without a period yet (first time sync), the consumption counted
+              // so far stays in the new one
+              if (key[p] != 0) {
+                // Unknown if the device was off for a whole period
+                const bool consecutive = next_key(p, key[p]) == k;
+                id(cost_prev_m3)[p] = consecutive ? m3[p] : NAN;
+                id(cost_prev_kwh)[p] = consecutive ? kwh[p] : NAN;
+                id(cost_prev_eur)[p] = consecutive && price > 0
+                    ? work[p] + daily_base * period_days(p, key[p], start_month, start_day) : NAN;
+                m3[p] = kwh[p] = work[p] = 0;
+                complete[p] = true;
+              }
+              key[p] = k;
+            }
+          }
+
+          // Consumption since the last check, from "Gas today"
+          const double volume = id(gas_pulse_volume);
+          const double today = (uint32_t) (id(gas_total_pulses) - id(gas_day_base)) * volume;
+          const double last = id(cost_last_today);
+          const bool same_day = id(gas_day_key) == id(cost_last_day_key);
+          const bool same_volume = volume == id(cost_last_volume);
+          id(cost_last_today) = today;
+          id(cost_last_day_key) = id(gas_day_key);
+          id(cost_last_volume) = volume;
+          // A new day starts "Gas today" at 0; a new pulse volume rounds it
+          if (std::isnan(last) || !same_day || !same_volume) return;
+          if (today > last) {
+            const double used = today - last;
+            const double energy = used * id(gas_calorific_value).state * id(gas_z_number).state;
+            for (int p = 0; p < PERIOD_COUNT; p++) {
+              m3[p] += used;
+              kwh[p] += energy;
+              if (price > 0) work[p] += energy * price;
+            }
+            id(energy_total) += energy;
+          } else if (today == 0 && last > 0) {
+            // "Reset statistics" was pressed
+            for (int p = DAY; p < BILLING; p++) {
+              m3[p] = kwh[p] = work[p] = 0;
+              complete[p] = false;
+            }
+            id(cost_prev_m3)[DAY] = id(cost_prev_kwh)[DAY] = id(cost_prev_eur)[DAY] = NAN;
+            ESP_LOGI("costs", "Today, this week, this month and this year reset to 0, the billing year stays");
+          }
+
+  # Converts the consumption of the current periods again with the current
+  # settings, e.g. after entering the energy price for the first time
+  - id: gas_cost_recalculate
+    then:
+      - lambda: |-
+          const double factor = id(gas_calorific_value).state * id(gas_z_number).state;
+          const double price = std::max(0.0, id(gas_energy_price).state / 100.0);
+          for (int p = 0; p < gas_costs::PERIOD_COUNT; p++) {
+            id(cost_kwh)[p] = id(cost_m3)[p] * factor;
+            id(cost_work)[p] = id(cost_kwh)[p] * price;
+          }
+          ESP_LOGI("costs", "Energy and costs of the current periods recalculated");
+      - script.execute: gas_cost_publish
+
+  # A new start date makes the current billing year count from now on, until
+  # the start reading is set again
+  - id: gas_billing_start_changed
+    then:
+      - lambda: |-
+          if (!id(gas_total_restored)) return;
+          const uint32_t anchor = (uint32_t) id(gas_billing_start_month).state * 100 + (uint32_t) id(gas_billing_start_day).state;
+          if (anchor == id(cost_billing_anchor)) return;
+          id(cost_billing_anchor) = anchor;
+          id(cost_key)[gas_costs::BILLING] = 0;
+          id(cost_complete)[gas_costs::BILLING] = false;
+          ESP_LOGI("costs", "New billing year start, please set \"Zählerstand Beginn Abrechnungsjahr\" again");
+      - script.execute: gas_cost_update
+      - script.execute: gas_cost_publish
+      - component.update: gas_billing_start_reading
+
+  - id: gas_cost_publish
+    then:
+      - lambda: |-
+          using namespace gas_costs;
+          if (!id(gas_total_restored)) return;
+          const auto &m3 = id(cost_m3);
+          const auto &kwh = id(cost_kwh);
+          const auto &work = id(cost_work);
+          const auto &key = id(cost_key);
+          const auto &complete = id(cost_complete);
+          const int start_month = (int) id(gas_billing_start_month).state;
+          const int start_day = (int) id(gas_billing_start_day).state;
+          const double price = id(gas_energy_price).state / 100.0;
+          const double daily_base = id(gas_base_price).state / 365.0;
+          const double installment = id(gas_installment).state;
+
+          auto now = id(sntp_time).now();
+          const bool valid = now.is_valid();
+          const int32_t today = valid ? days_from_civil(now.year, now.month, now.day_of_month) : 0;
+          const double day_fraction = valid ? (now.hour * 60 + now.minute) / 1440.0 : 0;
+          auto known = [&](int p) { return valid && key[p] != 0; };
+          auto value = [&](int p, const std::array<double, 5> &a) -> float { return known(p) ? a[p] : NAN; };
+          // Costs so far: energy price part plus the base price of every day begun
+          auto cost = [&](int p) -> float {
+            if (!known(p) || !(price > 0)) return NAN;
+            return work[p] + daily_base * (today - period_start(p, key[p], start_month, start_day) + 1);
+          };
+
+          id(gas_week).publish_state(value(WEEK, m3));
+          id(gas_last_week).publish_state(id(cost_prev_m3)[WEEK]);
+          id(gas_last_month).publish_state(id(cost_prev_m3)[MONTH]);
+          id(gas_last_year).publish_state(id(cost_prev_m3)[YEAR]);
+          id(gas_billing_year).publish_state(value(BILLING, m3));
+
+          id(gas_energy).publish_state(id(energy_total));
+          id(gas_energy_today).publish_state(value(DAY, kwh));
+          id(gas_energy_yesterday).publish_state(id(cost_prev_kwh)[DAY]);
+          id(gas_energy_week).publish_state(value(WEEK, kwh));
+          id(gas_energy_month).publish_state(value(MONTH, kwh));
+          id(gas_energy_year).publish_state(value(YEAR, kwh));
+
+          id(gas_cost_today).publish_state(cost(DAY));
+          id(gas_cost_yesterday).publish_state(id(cost_prev_eur)[DAY]);
+          id(gas_cost_week).publish_state(cost(WEEK));
+          id(gas_cost_last_week).publish_state(id(cost_prev_eur)[WEEK]);
+          id(gas_cost_month).publish_state(cost(MONTH));
+          id(gas_cost_last_month).publish_state(id(cost_prev_eur)[MONTH]);
+          id(gas_cost_year).publish_state(cost(YEAR));
+          id(gas_cost_last_year).publish_state(id(cost_prev_eur)[YEAR]);
+          const float billing_cost = cost(BILLING);
+          id(gas_cost_billing_year).publish_state(billing_cost);
+
+          // Installments and balance of the billing year (positive = credit)
+          const float paid = valid && installment > 0
+              ? installment * installments_due(now.year, now.month, now.day_of_month, start_month, start_day) : NAN;
+          id(gas_installments_paid).publish_state(paid);
+          id(gas_balance).publish_state(complete[BILLING] ? paid - billing_cost : NAN);
+
+          // Forecasts, only for periods counted from their start
+          float month_forecast = NAN;
+          if (known(MONTH) && complete[MONTH] && price > 0) {
+            const int days = days_in_month(now.year, now.month);
+            const double elapsed = now.day_of_month - 1 + day_fraction;
+            // Not on the first day, the consumption of a few hours says little
+            if (elapsed >= 1) month_forecast = work[MONTH] * days / elapsed + daily_base * days;
+          }
+          id(gas_cost_forecast_month).publish_state(month_forecast);
+
+          float billing_forecast = NAN;
+          if (known(BILLING) && complete[BILLING] && price > 0) {
+            // Extrapolated with the usual distribution over the year: in winter
+            // a day uses many times the gas of a summer day
+            const double share = billing_share_elapsed(now.year, now.month, now.day_of_month, day_fraction,
+                                                       start_month, start_day);
+            if (share >= 0.03)
+              billing_forecast = work[BILLING] / share +
+                                 daily_base * period_days(BILLING, key[BILLING], start_month, start_day);
+          }
+          id(gas_cost_forecast_billing_year).publish_state(billing_forecast);
+          id(gas_balance_forecast).publish_state(installment > 0 ? 12 * installment - billing_forecast : NAN);
+
+sensor:
+  # Current power from the gas flow
+  - id: !extend gas_pulse_meter
+    # Count every pulse right away, before a new day sets "Gas today" to 0
+    total:
+      on_raw_value:
+        - script.execute: gas_cost_update
+    on_value:
+      - sensor.template.publish:
+          id: gas_power
+          state: !lambda return x * id(gas_calorific_value).state * id(gas_z_number).state;
+
+  - platform: template
+    id: gas_power
+    name: Gas Leistung
+    unit_of_measurement: kW
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:fire
+    update_interval: never
+
+  # Consumption in m³ of further periods; today, yesterday, this month and
+  # this year come from gas-connect.yaml
+  - platform: template
+    id: gas_week
+    name: Gas diese Woche
+    update_interval: never
+    unit_of_measurement: "m³"
+    device_class: gas
+    state_class: total_increasing
+    accuracy_decimals: 2
+    icon: mdi:calendar-week
+  - platform: template
+    id: gas_last_week
+    name: Gas letzte Woche
+    update_interval: never
+    unit_of_measurement: "m³"
+    device_class: gas
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_last_month
+    name: Gas letzter Monat
+    update_interval: never
+    unit_of_measurement: "m³"
+    device_class: gas
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_last_year
+    name: Gas letztes Jahr
+    update_interval: never
+    unit_of_measurement: "m³"
+    device_class: gas
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_billing_year
+    name: Gas Abrechnungsjahr
+    update_interval: never
+    unit_of_measurement: "m³"
+    device_class: gas
+    state_class: total_increasing
+    accuracy_decimals: 2
+    icon: mdi:file-document-outline
+
+  # Energy in kWh: m³ × calorific value × z-number
+  - platform: template
+    id: gas_energy
+    name: Gas Energie
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:lightning-bolt
+  - platform: template
+    id: gas_energy_today
+    name: Gas Energie heute
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:calendar-today
+  - platform: template
+    id: gas_energy_yesterday
+    name: Gas Energie gestern
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    accuracy_decimals: 1
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_energy_week
+    name: Gas Energie diese Woche
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:calendar-week
+  - platform: template
+    id: gas_energy_month
+    name: Gas Energie dieser Monat
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:calendar-month
+  - platform: template
+    id: gas_energy_year
+    name: Gas Energie dieses Jahr
+    update_interval: never
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:calendar-blank
+
+  # Costs in EUR including the base price; unknown until the energy price is set
+  - platform: template
+    id: gas_cost_today
+    name: Gaskosten heute
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-today
+  - platform: template
+    id: gas_cost_yesterday
+    name: Gaskosten gestern
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_cost_week
+    name: Gaskosten diese Woche
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-week
+  - platform: template
+    id: gas_cost_last_week
+    name: Gaskosten letzte Woche
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_cost_month
+    name: Gaskosten dieser Monat
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-month
+  - platform: template
+    id: gas_cost_last_month
+    name: Gaskosten letzter Monat
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_cost_year
+    name: Gaskosten dieses Jahr
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-blank
+  - platform: template
+    id: gas_cost_last_year
+    name: Gaskosten letztes Jahr
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:calendar-arrow-left
+  - platform: template
+    id: gas_cost_billing_year
+    name: Gaskosten Abrechnungsjahr
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:file-document-outline
+
+  # Billing year of the gas supplier
+  - platform: template
+    id: gas_installments_paid
+    name: Abschläge bisher
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:cash-check
+  - platform: template
+    id: gas_balance
+    name: Saldo
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:scale-balance
+  - platform: template
+    id: gas_cost_forecast_month
+    name: Prognose Gaskosten Monat
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:chart-line
+  - platform: template
+    id: gas_cost_forecast_billing_year
+    name: Prognose Gaskosten Abrechnungsjahr
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:chart-line
+  - platform: template
+    id: gas_balance_forecast
+    name: Prognose Saldo
+    update_interval: never
+    unit_of_measurement: EUR
+    device_class: monetary
+    accuracy_decimals: 2
+    icon: mdi:scale-balance
+
+number:
+  # From the gas bill: kWh = m³ × calorific value × z-number
+  - platform: template
+    id: gas_calorific_value
+    name: Brennwert
+    icon: mdi:fire-circle
+    entity_category: config
+    unit_of_measurement: kWh/m³
+    mode: box
+    min_value: 8
+    max_value: 13
+    step: 0.001
+    initial_value: 11.2
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: gas_z_number
+    name: Zustandszahl
+    icon: mdi:thermometer-lines
+    entity_category: config
+    mode: box
+    min_value: 0.8
+    max_value: 1.1
+    step: 0.0001
+    initial_value: 0.95
+    optimistic: true
+    restore_value: true
+
+  # Prices from the gas contract, gross; 0 = not set, costs stay unknown
+  - platform: template
+    id: gas_energy_price
+    name: Arbeitspreis
+    icon: mdi:currency-eur
+    entity_category: config
+    unit_of_measurement: ct/kWh
+    mode: box
+    min_value: 0
+    max_value: 100
+    step: 0.01
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+    on_value:
+      - lambda: |-
+          if (!id(gas_total_restored)) return;
+          // The first price also applies to the consumption counted before it
+          const bool first = !(id(cost_last_price) > 0) && x > 0;
+          id(cost_last_price) = x;
+          if (first) id(gas_cost_recalculate).execute();
+  - platform: template
+    id: gas_base_price
+    name: Grundpreis
+    icon: mdi:currency-eur
+    entity_category: config
+    unit_of_measurement: EUR/year
+    mode: box
+    min_value: 0
+    max_value: 2000
+    step: 0.01
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  # Billing year of the gas supplier: start date, monthly installment and the
+  # meter reading at the start (from the last bill)
+  - platform: template
+    id: gas_installment
+    name: Monatlicher Abschlag
+    icon: mdi:cash-clock
+    entity_category: config
+    unit_of_measurement: EUR
+    mode: box
+    min_value: 0
+    max_value: 2000
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: gas_billing_start_day
+    name: Abrechnungsjahr Starttag
+    icon: mdi:calendar-start
+    entity_category: config
+    mode: box
+    min_value: 1
+    max_value: 31
+    step: 1
+    initial_value: 1
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: gas_billing_start_changed
+  - platform: template
+    id: gas_billing_start_month
+    name: Abrechnungsjahr Startmonat
+    icon: mdi:calendar-start
+    entity_category: config
+    mode: box
+    min_value: 1
+    max_value: 12
+    step: 1
+    initial_value: 1
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: gas_billing_start_changed
+  - platform: template
+    id: gas_billing_start_reading
+    name: Zählerstand Beginn Abrechnungsjahr
+    icon: mdi:counter
+    entity_category: config
+    unit_of_measurement: "m³"
+    mode: box
+    min_value: 0
+    max_value: 99999.999
+    step: 0.001
+    update_interval: 60s
+    lambda: |-
+      if (!id(cost_complete)[gas_costs::BILLING]) return NAN;
+      return id(gas_total_pulses) * id(gas_pulse_volume) - id(cost_m3)[gas_costs::BILLING];
+    set_action:
+      - lambda: |-
+          using namespace gas_costs;
+          const double used = id(gas_total_pulses) * id(gas_pulse_volume) - x;
+          if (used < 0) {
+            ESP_LOGW("costs", "Billing year start reading is above the meter reading, ignored");
+            return;
+          }
+          id(cost_m3)[BILLING] = used;
+          id(cost_kwh)[BILLING] = used * id(gas_calorific_value).state * id(gas_z_number).state;
+          id(cost_work)[BILLING] = id(cost_kwh)[BILLING] * std::max(0.0, id(gas_energy_price).state / 100.0);
+          id(cost_complete)[BILLING] = true;
+          ESP_LOGI("costs", "Billing year consumption set to %.3f m³", used);
+      - script.execute: gas_cost_publish
+      - component.update: gas_billing_start_reading
+
+button:
+  - platform: template
+    id: gas_cost_recalculate_button
+    name: Kosten neu berechnen
+    icon: mdi:calculator-variant
+    entity_category: config
+    on_press:
+      - script.execute: gas_cost_recalculate
